@@ -9,9 +9,9 @@ export default function Home() {
   const { data: session, status } = useSession();
 
   return (
-    <div className="bg-white text-slate-900 min-h-screen flex flex-col">
+    <div className="bg-white text-slate-900 min-h-screen flex flex-col overflow-hidden">
       {/* Refined Header with logo.png */}
-      <header className="h-20 bg-white border-b border-slate-100 shadow-sm shrink-0 sticky top-0 z-50">
+      <header className="hidden lg:block h-20 bg-white border-b border-slate-100 shadow-sm shrink-0 sticky top-0 z-50">
         <div className="flex justify-between items-center h-20 px-6 max-w-7xl mx-auto">
           <div className="flex items-center gap-4">
             <Link href="/" className="flex items-center gap-3">
@@ -78,7 +78,7 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="flex-1 flex flex-col">
+      <main className="flex-1 flex flex-col overflow-hidden">
         <ChatInterface />
       </main>
 

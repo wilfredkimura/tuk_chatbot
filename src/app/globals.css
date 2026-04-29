@@ -3,7 +3,7 @@
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   
-  /* Updated TUK Colors based on user feedback */
+  /* TUK Colors: Institutional Palette */
   --color-tuk-green: #007878;
   --color-tuk-gold: #bd8f33;
   --color-tuk-blue: #2d4156;
@@ -60,16 +60,23 @@
     border-radius: 10px;
   }
   
+  /* Flat, clean card design */
+  .clean-card {
+    background: white;
+    border: 1px solid #f1f5f9;
+    border-radius: 12px;
+  }
+
+  /* Minimalist button - no 3D effects, no rings, no shadows */
   .gold-button {
     background-color: var(--color-tuk-gold);
     color: white;
     padding: 10px 20px;
     border-radius: 8px;
     font-weight: 600;
-    transition: all 0.2s ease;
+    transition: background-color 0.2s ease;
   }
   .gold-button:hover {
     background-color: #a57a29;
-    transform: translateY(-1px);
   }
 }
