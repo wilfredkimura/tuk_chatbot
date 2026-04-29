@@ -9,9 +9,10 @@ export async function GET(req: NextRequest) {
     let sessionId = req.nextUrl.searchParams.get("sessionId");
     
     if (sessionId) {
-      // Handle "null" string from frontend
-      const query = sessionId === "null" ? { sessionId: { $in: [null, ""] } } : { sessionId };
-      if (sessionId === "null" && userId) {
+      // Handle "legacy" or "null" string from frontend
+      const isLegacy = sessionId === "legacy" || sessionId === "null";
+      const query = isLegacy ? { sessionId: { $in: [null, ""] } } : { sessionId };
+      if (isLegacy && userId) {
         (query as any).userId = userId;
       }
 
@@ -30,7 +31,7 @@ export async function GET(req: NextRequest) {
       { $sort: { createdAt: -1 } },
       {
         $group: {
-          _id: "$sessionId",
+          _id: { $ifNull: ["$sessionId", "legacy"] },
           content: { $first: "$content" },
           createdAt: { $first: "$createdAt" },
         }

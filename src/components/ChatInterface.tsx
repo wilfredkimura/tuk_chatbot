@@ -52,7 +52,7 @@ export default function ChatInterface() {
     setModalOpen(false);
     try {
       const currentUserId = session?.user?.email || guestId;
-      const res = await fetch(`/api/history?sessionId=${id}${id === "null" ? `&userId=${currentUserId}` : ""}`);
+      const res = await fetch(`/api/history?sessionId=${id}${id === "legacy" ? `&userId=${currentUserId}` : ""}`);
       const data = await res.json();
       if (data.messages) {
         setMessages(data.messages.map((m: any) => ({
@@ -61,7 +61,8 @@ export default function ChatInterface() {
           time: new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
         })));
         setSessionId(id);
-        if (id && id !== "null") router.push(`/?s=${id}`);
+        document.cookie = `lastSessionId=${id}; path=/; max-age=${60 * 60 * 24 * 7}`;
+        if (id && id !== "legacy") router.push(`/?s=${id}`);
       }
     } catch (e) {
       console.error("Failed to load convo:", e);
@@ -100,10 +101,17 @@ export default function ChatInterface() {
       fetchHistory(session.user.email);
     }
 
-    // Handle initial sessionId from URL
+    // Handle initial sessionId from URL or Cookie
     const urlSessionId = searchParams.get("s");
-    if (urlSessionId && !sessionId) {
-      loadConvo(urlSessionId);
+    const cookieSessionId = document.cookie
+      .split("; ")
+      .find((row) => row.startsWith("lastSessionId="))
+      ?.split("=")[1] || null;
+
+    const initialSessionId = urlSessionId || cookieSessionId;
+
+    if (initialSessionId && !sessionId) {
+      loadConvo(initialSessionId);
     }
   }, [session, searchParams, loadConvo, guestId, sessionId]);
 
@@ -205,6 +213,7 @@ export default function ChatInterface() {
     setSessionId(null);
     setInput("");
     setSidebarOpen(false);
+    document.cookie = "lastSessionId=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
     router.push("/");
   };
 
@@ -244,6 +253,7 @@ export default function ChatInterface() {
 
       if (data.sessionId) {
         setSessionId(data.sessionId);
+        document.cookie = `lastSessionId=${data.sessionId}; path=/; max-age=${60 * 60 * 24 * 7}`;
         router.push(`/?s=${data.sessionId}`);
       }
 
