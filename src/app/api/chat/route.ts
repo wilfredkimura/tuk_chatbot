@@ -70,7 +70,7 @@ Respond naturally as ${systemPrompt.name}. After your response, on a NEW LINE st
       contents: fullPrompt,
     });
 
-    const fullText = aiResponse.text;
+    const fullText = aiResponse.text || "";
     
     // Separate bot response from memory update instruction
     const parts = fullText.split("MEMORY_UPDATE:");
