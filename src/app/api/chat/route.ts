@@ -4,8 +4,10 @@ import Chat from "@/models/Chat";
 import Memory from "@/models/Memory";
 import systemPromptData from "@/lib/system_prompt.json";
 
-const GROQ_API_KEY = process.env.GROQ_API_KEY!;
-const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY!;
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
 interface Message {
   role: "system" | "user" | "assistant";
@@ -20,8 +22,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No messages provided" }, { status: 400 });
     }
 
-    if (!GROQ_API_KEY) {
-      return NextResponse.json({ error: "Groq API key not configured" }, { status: 500 });
+    if (!GEMINI_API_KEY) {
+      return NextResponse.json({ error: "Gemini API key not configured" }, { status: 500 });
     }
 
     // Connect to DB
@@ -42,41 +44,30 @@ export async function POST(req: NextRequest) {
     // Build system prompt from JSON
     const systemInstruction = systemPromptData.system_instructions + memoryContext;
 
-    // Prepare messages for Groq Chat Completion
-    const groqMessages = [
-      { role: "system", content: systemInstruction },
-      ...messages.map((m: any) => ({
-        role: m.role,
-        content: m.content
-      }))
-    ];
-
-    // Call Groq Chat Completions API
-    const groqResponse = await fetch(GROQ_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${GROQ_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
-        messages: groqMessages,
-        temperature: 0.7,
-        max_tokens: 1024,
-      }),
+    // Initialize Gemini model
+    const model = genAI.getGenerativeModel({ 
+      model: "gemini-2.0-flash",
+      systemInstruction: systemInstruction,
     });
 
-    if (!groqResponse.ok) {
-      const errorData = await groqResponse.json();
-      console.error("Groq API error:", errorData);
+    // Convert history for Gemini
+    const chat = model.startChat({
+      history: messages.slice(0, -1).map((m: any) => ({
+        role: m.role === "assistant" ? "model" : "user",
+        parts: [{ text: m.content }],
+      })),
+    });
+
+    const lastMessage = messages[messages.length - 1].content;
+    const result = await chat.sendMessage(lastMessage);
+    const aiContent = result.response.text();
+
+    if (!aiContent) {
       return NextResponse.json(
-        { error: errorData.error?.message || "Failed to get response from Groq" },
-        { status: groqResponse.status }
+        { error: "Failed to get response from Gemini" },
+        { status: 500 }
       );
     }
-
-    const groqData = await groqResponse.json();
-    const aiContent = groqData.choices?.[0]?.message?.content || "I'm sorry, I encountered an error processing the response.";
 
     // Save the user message and AI response to MongoDB
     if (userId) {

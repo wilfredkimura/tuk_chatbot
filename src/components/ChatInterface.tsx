@@ -291,9 +291,20 @@ export default function ChatInterface() {
             top-0 bottom-0
           `}
         >
+          <div className="p-6 border-b-2 border-slate-50 shrink-0">
+            <div className="flex flex-col items-center text-center">
+              <div className="w-20 h-20 mb-4 rounded-2xl bg-white shadow-md border-2 border-slate-50 flex items-center justify-center p-2">
+                <img src="/logo.png" alt="TUK Logo" className="w-full h-full object-contain" />
+              </div>
+              <h2 className="text-lg font-black text-tuk-green uppercase tracking-tighter leading-tight">
+                Technical University<br /><span className="text-tuk-gold text-xl">Of Kenya</span>
+              </h2>
+            </div>
+          </div>
+
           {/* Mobile sidebar header */}
           <div className="flex items-center justify-between p-4 border-b border-slate-100 lg:hidden shrink-0">
-            <span className="text-sm font-black text-tuk-green uppercase tracking-wider">Menu</span>
+            <span className="text-sm font-black text-tuk-green uppercase tracking-wider">Navigation</span>
             <button
               onClick={() => setSidebarOpen(false)}
               className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500"
@@ -357,6 +368,27 @@ export default function ChatInterface() {
               </div>
               <div className="absolute -right-4 -top-4 w-24 h-24 bg-tuk-gold/20 rounded-full blur-2xl" />
             </div>
+
+            {/* Powered By Section */}
+            <div className="pt-4 border-t border-slate-100 mt-auto">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4 px-1 text-center">
+                Powered by
+              </p>
+              <div className="flex items-center justify-center gap-6 opacity-40 hover:opacity-80 transition-opacity">
+                <div className="flex flex-col items-center gap-1" title="Google Gemini">
+                  <span className="material-symbols-outlined text-2xl text-blue-500">auto_awesome</span>
+                  <span className="text-[8px] font-bold text-slate-500 uppercase">Gemini</span>
+                </div>
+                <div className="flex flex-col items-center gap-1" title="Next.js">
+                  <img src="/next.svg" alt="Next.js" className="h-4 invert" />
+                  <span className="text-[8px] font-bold text-slate-500 uppercase">Next.js</span>
+                </div>
+                <div className="flex flex-col items-center gap-1" title="MongoDB">
+                  <span className="material-symbols-outlined text-2xl text-green-600">database</span>
+                  <span className="text-[8px] font-bold text-slate-500 uppercase">MongoDB</span>
+                </div>
+              </div>
+            </div>
           </div>
         </aside>
 
@@ -392,26 +424,24 @@ export default function ChatInterface() {
               {messages.map((msg, idx) => (
                 <div key={idx} className={`flex items-start gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
                   <div
-                    className={`w-9 h-9 sm:w-10 sm:h-10 border-2 rounded-xl flex items-center justify-center shrink-0 ${
-                      msg.role === "assistant"
+                    className={`w-9 h-9 sm:w-10 sm:h-10 border-2 rounded-xl flex items-center justify-center shrink-0 ${msg.role === "assistant"
                         ? "bg-tuk-green/10 border-tuk-green/20 text-tuk-green"
                         : "bg-tuk-gold/10 border-tuk-gold/20 text-tuk-gold"
-                    }`}
+                      }`}
                   >
                     <span className="material-symbols-outlined text-lg sm:text-xl">
                       {msg.role === "assistant" ? "smart_toy" : "person"}
                     </span>
                   </div>
                   <div className={`space-y-1.5 max-w-[85%] flex flex-col ${msg.role === "user" ? "items-end" : ""}`}>
-                      <div
-                        className={`p-3 sm:p-4 rounded-2xl markdown-content ${
-                          msg.role === "assistant"
-                            ? "bg-slate-50 text-slate-800 rounded-tl-none"
-                            : "bg-tuk-green text-white rounded-tr-none shadow-sm"
+                    <div
+                      className={`p-3 sm:p-4 rounded-2xl markdown-content ${msg.role === "assistant"
+                          ? "bg-slate-50 text-slate-800 rounded-tl-none"
+                          : "bg-tuk-green text-white rounded-tr-none shadow-sm"
                         }`}
-                      >
-                        <ReactMarkdown>{msg.content}</ReactMarkdown>
-                      </div>
+                    >
+                      <ReactMarkdown>{msg.content}</ReactMarkdown>
+                    </div>
                     <span className="text-[10px] text-slate-400 px-1 font-black uppercase tracking-wider">
                       {msg.role === "assistant" ? "TUK Chatbot" : "You"} • {msg.time}
                     </span>
