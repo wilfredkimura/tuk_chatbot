@@ -25,6 +25,7 @@ export default function ChatInterface() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [guestId, setGuestId] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -162,6 +163,35 @@ export default function ChatInterface() {
     scrollToBottom();
   }, [messages]);
 
+  const startNewChat = () => {
+    setMessages([]);
+    setSessionId(null);
+    setInput("");
+    setSidebarOpen(false);
+  };
+
+  const loadConvo = async (id: string) => {
+    setIsLoading(true);
+    setSidebarOpen(false);
+    setModalOpen(false);
+    try {
+      const res = await fetch(`/api/history?sessionId=${id}`);
+      const data = await res.json();
+      if (data.messages) {
+        setMessages(data.messages.map((m: any) => ({
+          role: m.role,
+          content: m.content,
+          time: new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+        })));
+        setSessionId(id);
+      }
+    } catch (e) {
+      console.error("Failed to load convo:", e);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
     const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -177,6 +207,7 @@ export default function ChatInterface() {
         body: JSON.stringify({
           messages: [...messages, userMessage],
           userId: session?.user?.email || guestId,
+          sessionId: sessionId,
         }),
       });
 
@@ -193,6 +224,8 @@ export default function ChatInterface() {
         ]);
         return;
       }
+
+      if (data.sessionId) setSessionId(data.sessionId);
 
       if (data.content) {
         setMessages((prev) => [
@@ -244,11 +277,11 @@ export default function ChatInterface() {
             <div ref={modalScrollRef} className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-2">
               {/* First 6 always shown */}
               {visibleConvos.map((convo) => (
-                <ConvoCard key={convo._id} convo={convo} />
+                <ConvoCard key={convo._id} convo={convo} onClick={() => loadConvo(convo._id)} />
               ))}
               {/* Extra convos loaded via infinite scroll */}
               {modalConvos.map((convo) => (
-                <ConvoCard key={convo._id} convo={convo} />
+                <ConvoCard key={convo._id} convo={convo} onClick={() => loadConvo(convo._id)} />
               ))}
               {/* Sentinel for infinite scroll */}
               <div ref={modalSentinelRef} className="h-4" />
@@ -302,6 +335,16 @@ export default function ChatInterface() {
             </button>
           </div>
 
+          <div className="p-4 border-b border-slate-100 shrink-0">
+            <button 
+              onClick={startNewChat}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-tuk-green text-white font-bold text-sm hover:brightness-110 transition-all shadow-md group"
+            >
+              <span className="material-symbols-outlined text-lg group-hover:rotate-90 transition-transform">add</span>
+              New Chat
+            </button>
+          </div>
+
           <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-8">
             {/* Past Conversations */}
             <section>
@@ -314,7 +357,12 @@ export default function ChatInterface() {
                 ) : (
                   <>
                     {visibleConvos.map((convo) => (
-                      <ConvoCard key={convo._id} convo={convo} />
+                      <ConvoCard 
+                        key={convo._id} 
+                        convo={convo} 
+                        active={sessionId === convo._id}
+                        onClick={() => loadConvo(convo._id)} 
+                      />
                     ))}
 
                     {hasMore && (
@@ -470,14 +518,23 @@ export default function ChatInterface() {
 }
 
 /* ─── ConvoCard ─── */
-function ConvoCard({ convo }: { convo: Convo }) {
+function ConvoCard({ convo, active, onClick }: { convo: Convo; active?: boolean; onClick: () => void }) {
   return (
-    <button className="w-full flex items-center justify-between p-3 border-b border-slate-50 hover:bg-slate-50 transition-all text-left group">
+    <button 
+      onClick={onClick}
+      className={`w-full flex items-center justify-between p-3 border-b border-slate-50 transition-all text-left group ${
+        active ? "bg-tuk-green/10 border-tuk-green/20" : "hover:bg-slate-50"
+      }`}
+    >
       <div className="flex items-center gap-3 overflow-hidden">
-        <span className="material-symbols-outlined text-slate-300 text-sm shrink-0">chat_bubble_outline</span>
-        <span className="text-sm text-slate-600 truncate font-medium">{convo.content}</span>
+        <span className={`material-symbols-outlined text-sm shrink-0 ${active ? "text-tuk-green" : "text-slate-300"}`}>
+          {active ? "chat_bubble" : "chat_bubble_outline"}
+        </span>
+        <span className={`text-sm truncate font-medium ${active ? "text-tuk-green" : "text-slate-600"}`}>
+          {convo.content}
+        </span>
       </div>
-      <span className="text-[10px] text-slate-300 font-bold shrink-0">
+      <span className={`text-[10px] font-bold shrink-0 ${active ? "text-tuk-green/60" : "text-slate-300"}`}>
         {new Date(convo.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
       </span>
     </button>

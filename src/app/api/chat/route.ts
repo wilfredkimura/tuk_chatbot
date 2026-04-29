@@ -14,7 +14,7 @@ interface Message {
 
 export async function POST(req: NextRequest) {
   try {
-    const { messages, userId } = await req.json();
+    const { messages, userId, sessionId: incomingSessionId } = await req.json();
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return NextResponse.json({ error: "No messages provided" }, { status: 400 });
@@ -26,6 +26,9 @@ export async function POST(req: NextRequest) {
 
     // Connect to DB
     await dbConnect();
+
+    // Generate or use existing sessionId
+    const sessionId = incomingSessionId || crypto.randomUUID();
 
     // Load memory context for this user
     let memoryContext = "";
@@ -84,6 +87,7 @@ export async function POST(req: NextRequest) {
       if (messages[messages.length - 1]?.role === "user") {
         await Chat.create({
           userId,
+          sessionId,
           role: "user",
           content: lastUserMessage,
         });
@@ -91,6 +95,7 @@ export async function POST(req: NextRequest) {
 
       await Chat.create({
         userId,
+        sessionId,
         role: "assistant",
         content: aiContent,
       });
@@ -99,7 +104,7 @@ export async function POST(req: NextRequest) {
       await updateMemory(userId, messages, aiContent);
     }
 
-    return NextResponse.json({ content: aiContent });
+    return NextResponse.json({ content: aiContent, sessionId });
   } catch (error) {
     console.error("Chat route error:", error);
     return NextResponse.json(
