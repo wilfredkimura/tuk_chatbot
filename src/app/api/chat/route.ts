@@ -4,12 +4,11 @@ import Chat from "@/models/Chat";
 import Memory from "@/models/Memory";
 import systemPromptData from "@/lib/system_prompt.json";
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY!;
-const GEMINI_API_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+const GROQ_API_KEY = process.env.GROQ_API_KEY!;
+const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 
 interface Message {
-  role: "user" | "assistant";
+  role: "system" | "user" | "assistant";
   content: string;
 }
 
@@ -21,8 +20,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No messages provided" }, { status: 400 });
     }
 
-    if (!GEMINI_API_KEY) {
-      return NextResponse.json({ error: "Gemini API key not configured" }, { status: 500 });
+    if (!GROQ_API_KEY) {
+      return NextResponse.json({ error: "Groq API key not configured" }, { status: 500 });
     }
 
     // Connect to DB
@@ -43,59 +42,50 @@ export async function POST(req: NextRequest) {
     // Build system prompt from JSON
     const systemInstruction = systemPromptData.system_instructions + memoryContext;
 
-    // Convert messages to Gemini format
-    // Gemini uses "model" instead of "assistant"
-    const geminiContents = messages.map((msg: Message) => ({
-      role: msg.role === "assistant" ? "model" : "user",
-      parts: [{ text: msg.content }],
-    }));
+    // Prepare messages for Groq Chat Completion
+    const groqMessages = [
+      { role: "system", content: systemInstruction },
+      ...messages.map((m: any) => ({
+        role: m.role,
+        content: m.content
+      }))
+    ];
 
-    // Call Gemini API
-    const geminiResponse = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+    // Call Groq Chat Completions API
+    const groqResponse = await fetch(GROQ_API_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${GROQ_API_KEY}`
+      },
       body: JSON.stringify({
-        system_instruction: {
-          parts: [{ text: systemInstruction }],
-        },
-        contents: geminiContents,
-        generationConfig: {
-          temperature: 0.7,
-          topK: 40,
-          topP: 0.95,
-          maxOutputTokens: 1024,
-        },
-        safetySettings: [
-          { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
-          { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
-          { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
-          { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
-        ],
+        model: "llama-3.3-70b-versatile",
+        messages: groqMessages,
+        temperature: 0.7,
+        max_tokens: 1024,
       }),
     });
 
-    if (!geminiResponse.ok) {
-      const errorData = await geminiResponse.json();
-      console.error("Gemini API error:", errorData);
+    if (!groqResponse.ok) {
+      const errorData = await groqResponse.json();
+      console.error("Groq API error:", errorData);
       return NextResponse.json(
-        { error: "Failed to get response from AI" },
-        { status: geminiResponse.status }
+        { error: errorData.error?.message || "Failed to get response from Groq" },
+        { status: groqResponse.status }
       );
     }
 
-    const geminiData = await geminiResponse.json();
-    const aiContent =
-      geminiData?.candidates?.[0]?.content?.parts?.[0]?.text ||
-      "I'm sorry, I couldn't generate a response. Please try again.";
+    const groqData = await groqResponse.json();
+    const aiContent = groqData.choices?.[0]?.message?.content || "I'm sorry, I encountered an error processing the response.";
 
     // Save the user message and AI response to MongoDB
     if (userId) {
-      const lastUserMessage = messages[messages.length - 1];
-      if (lastUserMessage?.role === "user") {
+      const lastUserMessage = messages[messages.length - 1]?.content || "";
+      if (messages[messages.length - 1]?.role === "user") {
         await Chat.create({
           userId,
           role: "user",
-          content: lastUserMessage.content,
+          content: lastUserMessage,
         });
       }
 

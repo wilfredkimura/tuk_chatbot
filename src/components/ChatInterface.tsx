@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
+import ReactMarkdown from "react-markdown";
 
 interface Message {
   role: "user" | "assistant";
@@ -20,14 +21,7 @@ const MODAL_PAGE_SIZE = 15;
 
 export default function ChatInterface() {
   const { data: session } = useSession();
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      role: "assistant",
-      content:
-        "Hello! Welcome to the TUK Chatbot. I'm here to help you with any academic or administrative questions you might have. How can I assist you today?",
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [guestId, setGuestId] = useState<string | null>(null);
@@ -185,7 +179,21 @@ export default function ChatInterface() {
           userId: session?.user?.email || guestId,
         }),
       });
+
       const data = await response.json();
+
+      if (!response.ok) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: `⚠️ Error: ${data.error || "Failed to get response"}. ${response.status === 429 ? "API Quota Exceeded. Please try again later." : ""}`,
+            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          },
+        ]);
+        return;
+      }
+
       if (data.content) {
         setMessages((prev) => [
           ...prev,
@@ -268,7 +276,7 @@ export default function ChatInterface() {
       )}
 
       {/* ─── Main Layout ─── */}
-      <div className="flex h-screen lg:h-[calc(100vh-80px)] overflow-hidden bg-white relative">
+      <div className="flex h-screen overflow-hidden bg-white relative">
 
         {/* ─── Sidebar (Desktop always visible / Mobile slide-in) ─── */}
         <aside
@@ -379,11 +387,7 @@ export default function ChatInterface() {
           {/* Messages */}
           <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 sm:py-8 custom-scrollbar">
             <div className="max-w-3xl mx-auto space-y-6">
-              <div className="flex justify-center items-center gap-4 py-2">
-                <div className="h-[1px] flex-1 bg-slate-100"></div>
-                <span className="text-[10px] text-slate-400 font-bold tracking-widest">SESSION START</span>
-                <div className="h-[1px] flex-1 bg-slate-100"></div>
-              </div>
+              {/* Removed SESSION START divider */}
 
               {messages.map((msg, idx) => (
                 <div key={idx} className={`flex items-start gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
@@ -399,15 +403,15 @@ export default function ChatInterface() {
                     </span>
                   </div>
                   <div className={`space-y-1.5 max-w-[85%] flex flex-col ${msg.role === "user" ? "items-end" : ""}`}>
-                    <div
-                      className={`p-3 sm:p-4 rounded-2xl border-2 ${
-                        msg.role === "assistant"
-                          ? "bg-white border-slate-200 text-slate-800 rounded-tl-none"
-                          : "bg-tuk-green border-tuk-green text-white rounded-tr-none"
-                      }`}
-                    >
-                      <p className="text-sm sm:text-[15px] leading-relaxed font-semibold">{msg.content}</p>
-                    </div>
+                      <div
+                        className={`p-3 sm:p-4 rounded-2xl markdown-content ${
+                          msg.role === "assistant"
+                            ? "bg-slate-50 text-slate-800 rounded-tl-none"
+                            : "bg-tuk-green text-white rounded-tr-none shadow-sm"
+                        }`}
+                      >
+                        <ReactMarkdown>{msg.content}</ReactMarkdown>
+                      </div>
                     <span className="text-[10px] text-slate-400 px-1 font-black uppercase tracking-wider">
                       {msg.role === "assistant" ? "TUK Chatbot" : "You"} • {msg.time}
                     </span>
@@ -416,9 +420,12 @@ export default function ChatInterface() {
               ))}
 
               {isLoading && (
-                <div className="flex items-start gap-3 animate-pulse">
-                  <div className="w-9 h-9 rounded-xl bg-slate-100 shrink-0" />
-                  <div className="bg-slate-50 w-32 h-14 rounded-2xl rounded-tl-none border border-slate-100" />
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-xl shimmer shrink-0" />
+                  <div className="flex-1 max-w-[240px] space-y-2 pt-1">
+                    <div className="h-4 w-full rounded-md shimmer" />
+                    <div className="h-4 w-[80%] rounded-md shimmer" />
+                  </div>
                 </div>
               )}
 
@@ -440,12 +447,11 @@ export default function ChatInterface() {
                       handleSend();
                     }
                   }}
-                  className="w-full bg-transparent border-none focus:ring-0 outline-none text-sm resize-none py-3 px-3 min-h-[44px] max-h-32 custom-scrollbar text-slate-800 font-semibold placeholder:text-slate-400 placeholder:font-medium"
+                  className="w-full bg-transparent border-none focus:ring-0 outline-none text-sm resize-none py-3 px-3 min-h-[44px] max-h-32 custom-scrollbar text-slate-800 placeholder:text-slate-400 placeholder:font-medium"
                   placeholder="Ask your question here..."
                 />
                 <div className="flex items-center gap-1 px-2 pb-1">
                   <IconButton icon="attach_file" title="Attach file" />
-                  <IconButton icon="image" title="Send image" />
                 </div>
               </div>
               <button
@@ -466,16 +472,14 @@ export default function ChatInterface() {
 /* ─── ConvoCard ─── */
 function ConvoCard({ convo }: { convo: Convo }) {
   return (
-    <button className="w-full flex flex-col p-3 bg-white border-2 border-slate-100 rounded-xl hover:bg-slate-50 hover:border-tuk-green/20 transition-all text-left group">
-      <div className="flex items-center gap-2 mb-1 w-full">
-        <div className="w-6 h-6 rounded-md bg-tuk-green/10 flex items-center justify-center text-tuk-green shrink-0">
-          <span className="material-symbols-outlined text-[14px]">history</span>
-        </div>
-        <h4 className="text-sm font-bold text-slate-800 truncate flex-1">{convo.content}</h4>
+    <button className="w-full flex items-center justify-between p-3 border-b border-slate-50 hover:bg-slate-50 transition-all text-left group">
+      <div className="flex items-center gap-3 overflow-hidden">
+        <span className="material-symbols-outlined text-slate-300 text-sm shrink-0">chat_bubble_outline</span>
+        <span className="text-sm text-slate-600 truncate font-medium">{convo.content}</span>
       </div>
-      <p className="text-[11px] font-medium text-slate-500 pl-8">
-        {new Date(convo.createdAt).toLocaleDateString()}
-      </p>
+      <span className="text-[10px] text-slate-300 font-bold shrink-0">
+        {new Date(convo.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+      </span>
     </button>
   );
 }
