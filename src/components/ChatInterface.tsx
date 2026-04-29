@@ -583,19 +583,14 @@ function ConvoCard({ convo, active, onClick }: { convo: Convo; active?: boolean;
   return (
     <button 
       onClick={onClick}
-      className={`w-full flex items-center justify-between p-3 border-b border-slate-50 transition-all text-left group ${
-        active ? "bg-tuk-green/10 border-tuk-green/20" : "hover:bg-slate-50"
+      className={`w-full flex items-center justify-between py-2 px-3 border-b border-slate-50 transition-all text-left group ${
+        active ? "bg-tuk-green/5 border-tuk-green/20" : "hover:bg-slate-50"
       }`}
     >
-      <div className="flex items-center gap-3 overflow-hidden">
-        <span className={`material-symbols-outlined text-sm shrink-0 ${active ? "text-tuk-green" : "text-slate-300"}`}>
-          {active ? "chat_bubble" : "chat_bubble_outline"}
-        </span>
-        <span className={`text-sm truncate font-medium ${active ? "text-tuk-green" : "text-slate-600"}`}>
-          {convo.content}
-        </span>
-      </div>
-      <div className="flex flex-col text-[10px] font-bold shrink-0 items-end text-slate-300 group-hover:text-tuk-green/60 transition-colors">
+      <span className={`text-xs truncate font-medium flex-1 pr-4 ${active ? "text-tuk-green" : "text-slate-600"}`}>
+        {convo.content}
+      </span>
+      <div className="flex flex-col text-[9px] font-bold shrink-0 items-end text-slate-300 group-hover:text-tuk-green/60 transition-colors">
         <span>{new Date(convo.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>
         <span>{new Date(convo.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
       </div>
