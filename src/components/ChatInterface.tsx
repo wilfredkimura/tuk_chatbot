@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useSession } from "next-auth/react";
 
 interface Message {
   role: "user" | "assistant";
@@ -9,17 +10,31 @@ interface Message {
 }
 
 export default function ChatInterface() {
+  const { data: session } = useSession();
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
-      content: "Hello! I'm your College Bot. How can I assist you with your academic journey today? I can help with admissions, registration, or navigating campus life.",
-      time: "09:15 AM"
+      content: "Hello! Welcome to the TUK Chatbot. I'm here to help you with any academic or administrative questions you might have. How can I assist you today?",
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     },
   ]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [guestId, setGuestId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Guest ID initialization
+  useEffect(() => {
+    if (!session) {
+      let id = document.cookie.split('; ').find(row => row.startsWith('guestId='))?.split('=')[1];
+      if (!id) {
+        id = 'guest_' + Math.random().toString(36).substring(2, 15);
+        document.cookie = `guestId=${id}; path=/; max-age=${60 * 60 * 24 * 30}`; // 30 days
+      }
+      setGuestId(id);
+    }
+  }, [session]);
 
   const adjustHeight = () => {
     const textarea = textareaRef.current;
@@ -56,7 +71,10 @@ export default function ChatInterface() {
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: [...messages, userMessage] }),
+        body: JSON.stringify({ 
+          messages: [...messages, userMessage],
+          userId: session?.user?.email || guestId 
+        }),
       });
 
       const data = await response.json();
@@ -75,85 +93,85 @@ export default function ChatInterface() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-64px)] overflow-hidden">
-      {/* Sidebar: Fixed height, independent scroll */}
-      <aside className="hidden lg:flex flex-col w-80 bg-surface-container-low border-r border-outline-variant/30 shrink-0">
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-10">
+    <div className="flex h-[calc(100vh-80px)] overflow-hidden bg-white">
+      {/* Modern Sidebar with Green/Gold Theme */}
+      <aside className="hidden lg:flex flex-col w-72 bg-slate-50 border-r border-slate-100 shrink-0">
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-8">
           <section>
-            <h3 className="text-[12px] font-bold text-on-surface-variant uppercase mb-3 px-3 tracking-wider">Recent Chats</h3>
-            <div className="space-y-1">
-              <button className="w-full flex items-center gap-3 p-3 rounded-xl bg-white border border-outline-variant shadow-sm text-left">
-                <span className="material-symbols-outlined text-primary-container">chat_bubble</span>
+            <h3 className="text-xs font-bold text-tuk-green/60 mb-4 px-1">Recent activity</h3>
+            <div className="space-y-2">
+              <button className="w-full flex items-center gap-3 p-3 bg-white border border-slate-100 rounded-xl hover:border-tuk-gold transition-all text-left shadow-sm group">
+                <div className="w-8 h-8 rounded-lg bg-tuk-green/5 flex items-center justify-center text-tuk-green group-hover:bg-tuk-gold group-hover:text-white transition-all">
+                  <span className="material-symbols-outlined text-lg">chat_bubble</span>
+                </div>
                 <div className="overflow-hidden">
-                  <p className="text-sm font-semibold truncate">Financial Aid Inquiry</p>
-                  <p className="text-[10px] text-on-surface-variant">2 hours ago</p>
+                  <p className="text-sm font-semibold text-slate-700 truncate">Course registration</p>
+                  <p className="text-[10px] text-slate-400">Past session</p>
                 </div>
               </button>
             </div>
           </section>
 
           <section>
-            <h3 className="text-[12px] font-bold text-on-surface-variant uppercase mb-3 px-3 tracking-wider">Quick Links</h3>
-            <div className="grid grid-cols-1 gap-3">
-              <QuickLink icon="account_balance" label="Admissions" />
-              <QuickLink icon="payments" label="Financial Aid" />
-              <QuickLink icon="map" label="Campus Map" />
+            <h3 className="text-xs font-bold text-tuk-green/60 mb-4 px-1">Quick links</h3>
+            <div className="grid grid-cols-1 gap-2">
+              <QuickLink icon="school" label="Admissions" />
+              <QuickLink icon="payments" label="Student finance" />
+              <QuickLink icon="library_books" label="Library" />
             </div>
           </section>
 
-          <div className="relative overflow-hidden rounded-xl bg-primary-container p-6 text-white">
+          <div className="p-5 rounded-2xl bg-tuk-green text-white shadow-lg relative overflow-hidden">
             <div className="relative z-10">
-              <p className="text-lg font-bold mb-1">Need human help?</p>
-              <p className="text-sm opacity-80 mb-4">Connect with a real advisor during office hours.</p>
-              <button className="w-full py-2 bg-secondary text-white rounded-lg font-bold text-sm hover:opacity-90 transition-opacity">Contact Support</button>
+              <p className="text-sm font-bold mb-2">Need human help?</p>
+              <p className="text-xs text-green-50/80 mb-4 leading-relaxed">Connect with an advisor for specialized support during office hours.</p>
+              <button className="w-full py-2.5 bg-tuk-gold text-tuk-text rounded-lg font-bold text-xs hover:brightness-110 transition-all shadow-sm">Contact Support</button>
             </div>
-            <div className="absolute -right-4 -bottom-4 opacity-10">
-              <span className="material-symbols-outlined text-8xl" style={{ fontVariationSettings: "'FILL' 1" }}>school</span>
-            </div>
+            <div className="absolute -right-4 -top-4 w-24 h-24 bg-tuk-gold/20 rounded-full blur-2xl" />
           </div>
         </div>
       </aside>
 
       {/* Main Chat Area */}
-      <section className="flex-1 flex flex-col relative bg-surface-bright">
-        <div className="flex-1 overflow-y-auto px-4 py-10 custom-scrollbar">
-          <div className="max-w-3xl mx-auto space-y-6">
-            <div className="flex justify-center items-center gap-6">
-              <div className="h-[1px] flex-1 bg-outline-variant/30"></div>
-              <span className="text-[10px] text-on-surface-variant font-bold uppercase tracking-widest">Today</span>
-              <div className="h-[1px] flex-1 bg-outline-variant/30"></div>
+      <section className="flex-1 flex flex-col relative bg-white">
+        <div className="flex-1 overflow-y-auto px-6 py-8 custom-scrollbar">
+          <div className="max-w-3xl mx-auto space-y-8">
+            <div className="flex justify-center items-center gap-4 py-4">
+              <div className="h-[1px] flex-1 bg-slate-100"></div>
+              <span className="text-[10px] text-slate-400 font-bold tracking-widest">SESSION START</span>
+              <div className="h-[1px] flex-1 bg-slate-100"></div>
             </div>
 
             {messages.map((msg, idx) => (
-              <div key={idx} className={`flex items-start gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 shadow-sm overflow-hidden ${
-                  msg.role === 'assistant' ? 'bg-primary-container text-white border border-secondary/30' : 'bg-surface-container-highest text-primary-container'
+              <div key={idx} className={`flex items-start gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
+                <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 shadow-sm ${
+                  msg.role === 'assistant' 
+                  ? 'bg-tuk-green text-white' 
+                  : 'bg-tuk-gold text-tuk-text'
                 }`}>
-                  {msg.role === 'assistant' ? (
-                    <span className="material-symbols-outlined text-lg" style={{ fontVariationSettings: "'FILL' 1" }}>smart_toy</span>
-                  ) : (
-                    <span className="material-symbols-outlined text-lg">person</span>
-                  )}
+                  <span className="material-symbols-outlined text-lg">
+                    {msg.role === 'assistant' ? 'smart_toy' : 'person'}
+                  </span>
                 </div>
-                <div className={`space-y-1 max-w-[80%] flex flex-col ${msg.role === 'user' ? 'items-end' : ''}`}>
-                  <div className={`p-4 rounded-xl shadow-sm border ${
+                <div className={`space-y-1.5 max-w-[85%] flex flex-col ${msg.role === 'user' ? 'items-end' : ''}`}>
+                  <div className={`p-4 rounded-2xl ${
                     msg.role === 'assistant' 
-                    ? 'bg-primary-container text-white rounded-tl-none border-l-[3px] border-l-secondary' 
-                    : 'bg-[#F1F5F9] text-on-background rounded-tr-none border-outline-variant'
+                    ? 'bg-white border border-slate-100 shadow-sm text-slate-700 rounded-tl-none' 
+                    : 'bg-tuk-green text-white rounded-tr-none shadow-md'
                   }`}>
-                    <p className="text-[16px] leading-relaxed">{msg.content}</p>
+                    <p className="text-[15px] leading-relaxed font-medium">{msg.content}</p>
                   </div>
-                  <span className="text-[10px] text-on-surface-variant px-1">
-                    {msg.role === 'assistant' ? 'College Bot' : 'You'} • {msg.time}
+                  <span className="text-[10px] text-slate-400 px-1 font-bold">
+                    {msg.role === 'assistant' ? 'TUK Chatbot' : 'You'} • {msg.time}
                   </span>
                 </div>
               </div>
             ))}
             
             {isLoading && (
-              <div className="flex items-start gap-3 animate-pulse">
-                <div className="w-10 h-10 rounded-full bg-primary-container/20 shrink-0" />
-                <div className="bg-primary-container/10 w-24 h-12 rounded-xl rounded-tl-none" />
+              <div className="flex items-start gap-4 animate-pulse">
+                <div className="w-9 h-9 rounded-full bg-slate-100 shrink-0" />
+                <div className="bg-slate-50 w-32 h-14 rounded-2xl rounded-tl-none border border-slate-100" />
               </div>
             )}
             
@@ -161,10 +179,10 @@ export default function ChatInterface() {
           </div>
         </div>
 
-        {/* Input Area */}
-        <div className="p-4 bg-white/80 backdrop-blur-md border-t border-outline-variant/30 sticky bottom-0">
-          <div className="max-w-3xl mx-auto flex items-end gap-3">
-          <div className="flex-1 bg-white rounded-xl transition-all p-1 flex flex-col">
+        {/* Input Area with Gold Button */}
+        <div className="p-6 bg-white border-t border-slate-100">
+          <div className="max-w-3xl mx-auto flex items-end gap-3 bg-slate-50 p-2 rounded-2xl border border-slate-200 shadow-sm transition-all">
+            <div className="flex-1 flex flex-col">
               <textarea 
                 ref={textareaRef}
                 value={input}
@@ -175,23 +193,20 @@ export default function ChatInterface() {
                     handleSend();
                   }
                 }}
-                className="w-full bg-transparent border-none focus:ring-0 text-sm resize-none py-3 px-4 min-h-[48px] max-h-32 custom-scrollbar" 
-                placeholder="Ask anything about campus..."
+                className="w-full bg-transparent border-none focus:ring-0 outline-none text-sm resize-none py-3 px-3 min-h-[44px] max-h-32 custom-scrollbar text-slate-700 font-medium" 
+                placeholder="Ask your question here..."
               />
-              <div className="flex justify-between items-center px-3 pb-2">
-                <div className="flex gap-1">
-                  <IconButton icon="attach_file" title="Attach Document" />
-                  <IconButton icon="image" title="Add Image" />
-                </div>
-                <span className="text-[10px] text-outline-variant">Press Enter to send</span>
+              <div className="flex items-center gap-1 px-2 pb-1">
+                 <IconButton icon="attach_file" title="Attach file" />
+                 <IconButton icon="image" title="Send image" />
               </div>
             </div>
             <button 
               onClick={handleSend}
               disabled={!input.trim() || isLoading}
-              className="p-4 bg-secondary text-white rounded-xl shadow-md hover:opacity-90 active:scale-95 transition-all flex items-center justify-center disabled:opacity-50"
+              className="w-12 h-12 bg-tuk-gold text-tuk-text rounded-xl flex items-center justify-center shadow-lg hover:brightness-105 active:scale-95 transition-all disabled:opacity-30 disabled:scale-100"
             >
-              <span className="material-symbols-outlined font-bold" style={{ fontVariationSettings: "'FILL' 1" }}>send</span>
+              <span className="material-symbols-outlined text-xl font-bold">send</span>
             </button>
           </div>
         </div>
@@ -202,18 +217,18 @@ export default function ChatInterface() {
 
 function QuickLink({ icon, label }: { icon: string, label: string }) {
   return (
-    <a className="group flex items-center gap-3 p-3 bg-white border border-outline-variant rounded-xl hover:border-secondary transition-all" href="#">
-      <div className="p-2 rounded-lg bg-primary-container text-white">
+    <a className="group flex items-center gap-3 p-3 bg-white border border-slate-100 rounded-xl hover:border-tuk-green hover:shadow-sm transition-all" href="#">
+      <div className="w-8 h-8 rounded-lg bg-tuk-green/5 flex items-center justify-center text-tuk-green group-hover:bg-tuk-green group-hover:text-white transition-all">
         <span className="material-symbols-outlined text-lg">{icon}</span>
       </div>
-      <span className="text-sm font-semibold">{label}</span>
+      <span className="text-sm font-semibold text-slate-600 group-hover:text-tuk-green transition-colors">{label}</span>
     </a>
   );
 }
 
 function IconButton({ icon, title }: { icon: string, title: string }) {
   return (
-    <button className="p-2 hover:bg-surface-container rounded-lg text-on-surface-variant transition-colors" title={title}>
+    <button className="p-1.5 text-slate-400 hover:text-tuk-green hover:bg-white rounded-lg transition-all" title={title}>
       <span className="material-symbols-outlined text-lg">{icon}</span>
     </button>
   );

@@ -3,33 +3,33 @@
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   
-  /* Primary Colors */
-  --color-primary: #000a1e;
-  --color-primary-container: #002147;
-  --color-on-primary: #ffffff;
-  --color-on-primary-container: #708ab5;
-  
-  /* Secondary & Tertiary */
-  --color-secondary: #775a19;
-  --color-secondary-container: #fed488;
-  --color-on-secondary: #ffffff;
-  --color-tertiary: #000b1b;
-  --color-tertiary-container: #122236;
-  
-  /* Surfaces */
-  --color-background: #f7f9fb;
-  --color-surface: #f7f9fb;
-  --color-surface-bright: #f7f9fb;
-  --color-surface-container: #eceef0;
-  --color-surface-container-low: #f2f4f6;
-  --color-surface-container-high: #e6e8ea;
-  --color-surface-container-highest: #e0e3e5;
-  --color-on-surface: #191c1e;
-  --color-on-surface-variant: #44474e;
-  
-  /* Utilities */
-  --color-outline: #74777f;
-  --color-outline-variant: #c4c6cf;
+  /* Updated TUK Colors based on user feedback */
+  --color-tuk-green: #007878;
+  --color-tuk-gold: #bd8f33;
+  --color-tuk-blue: #2d4156;
+  --color-tuk-red: #c8102e;
+  --color-tuk-white: #ffffff;
+  --color-tuk-gray-light: #f8fafc;
+  --color-tuk-gray-medium: #64748b;
+  --color-tuk-text: #0f172a;
+
+  /* Semantic Mappings */
+  --color-primary: var(--color-tuk-green);
+  --color-accent: var(--color-tuk-gold);
+  --color-secondary: var(--color-tuk-gold);
+  --color-background: var(--color-tuk-white);
+  --color-surface: var(--color-tuk-gray-light);
+}
+
+:root {
+  --tuk-green: #007878;
+  --tuk-gold: #bd8f33;
+  --tuk-blue: #2d4156;
+  --tuk-red: #c8102e;
+  --tuk-white: #ffffff;
+  --tuk-gray-light: #f8fafc;
+  --tuk-gray-medium: #64748b;
+  --tuk-text: #0f172a;
 }
 
 @layer base {
@@ -37,18 +37,39 @@
     background-color: var(--color-background);
     color: var(--color-on-background);
     font-family: var(--font-sans);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-weight: 600;
+    color: var(--color-tuk-green);
+    letter-spacing: -0.01em;
   }
 }
 
 @layer utilities {
   .custom-scrollbar::-webkit-scrollbar {
-    width: 4px;
+    width: 5px;
   }
   .custom-scrollbar::-webkit-scrollbar-track {
     background: transparent;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: #e0e3e5;
+    background: #e2e8f0;
     border-radius: 10px;
+  }
+  
+  .gold-button {
+    background-color: var(--color-tuk-gold);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+  }
+  .gold-button:hover {
+    background-color: #a57a29;
+    transform: translateY(-1px);
   }
 }
