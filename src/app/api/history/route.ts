@@ -6,11 +6,16 @@ export async function GET(req: NextRequest) {
   try {
     await dbConnect();
     const userId = req.nextUrl.searchParams.get("userId");
-    const sessionId = req.nextUrl.searchParams.get("sessionId");
+    let sessionId = req.nextUrl.searchParams.get("sessionId");
     
     if (sessionId) {
-      // Fetch all messages for a specific session
-      const messages = await Chat.find({ sessionId }).sort({ createdAt: 1 });
+      // Handle "null" string from frontend
+      const query = sessionId === "null" ? { sessionId: { $in: [null, ""] } } : { sessionId };
+      if (sessionId === "null" && userId) {
+        (query as any).userId = userId;
+      }
+
+      const messages = await Chat.find(query).sort({ createdAt: 1 });
       return NextResponse.json({ messages });
     }
 
