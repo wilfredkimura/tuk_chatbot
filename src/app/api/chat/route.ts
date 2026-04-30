@@ -3,6 +3,7 @@ import dbConnect from "@/lib/db";
 import Chat from "@/models/Chat";
 import Memory from "@/models/Memory";
 import systemPromptData from "@/lib/system_prompt.json";
+import { getRelevantContext } from "@/lib/rag";
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY!;
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
@@ -30,6 +31,12 @@ export async function POST(req: NextRequest) {
     // Generate or use existing sessionId
     const sessionId = incomingSessionId || crypto.randomUUID();
 
+    // Get the latest user message
+    const userMessage = messages[messages.length - 1]?.content || "";
+
+    // FETCH RELEVANT KNOWLEDGE (RAG)
+    const relevantContext = await getRelevantContext(userMessage);
+
     // Load memory context for this user
     let memoryContext = "";
     if (userId) {
@@ -42,8 +49,8 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Build system prompt from JSON
-    const systemInstruction = systemPromptData.system_instructions + memoryContext;
+    // Build system prompt from JSON + RAG Context
+    const systemInstruction = systemPromptData.system_instructions + "\n\n" + relevantContext + memoryContext;
 
     // Prepare messages for Groq Chat Completion
     const groqMessages = [
@@ -53,6 +60,7 @@ export async function POST(req: NextRequest) {
         content: m.content
       }))
     ];
+
 
     // Call Groq Chat Completions API
     const groqResponse = await fetch(GROQ_API_URL, {
