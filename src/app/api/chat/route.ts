@@ -71,7 +71,8 @@ export async function POST(req: NextRequest) {
         let fullText = "";
         try {
           for await (const chunk of streamResult) {
-            const text = typeof chunk.text === "function" ? chunk.text() : "";
+            const text = chunk.text || "";
+
 
 
             if (text) {
