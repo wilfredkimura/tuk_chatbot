@@ -9,10 +9,11 @@ The TUK Chatbot has been upgraded to a **Retrieval-Augmented Generation (RAG)** 
 All raw data files (PDFs, JSON, TXT) are stored in the `data/knowledge` directory. This is the "Source of Truth."
 
 ### Step 2: Processing & Chunking
-When the ingestion API is called, the [documentProcessor.ts](file:///c:/Users/DENNISMUTUKU/Desktop/tuk_chatbot/src/lib/documentProcessor.ts) performs the following:
+When the ingestion API is called, the [processor.ts](file:///c:/Users/DENNISMUTUKU/Desktop/tuk_chatbot/src/lib/rag/processor.ts) performs the following:
 - **Parsing**: Extracts text from PDFs and structured data from JSON.
 - **Chunking**: Breaks long text into ~1000 character pieces. This ensures that the context provided to the AI is specific and focused.
-- **Embedding**: Each chunk is sent to the **Gemini Embedding API** (`text-embedding-004`), which converts the text into a 768-dimensional numerical vector.
+- **Embedding**: Each chunk is sent to the **Gemini Embedding API** (`text-embedding-004`) via [gemini.ts](file:///c:/Users/DENNISMUTUKU/Desktop/tuk_chatbot/src/services/gemini.ts), which converts the text into a 768-dimensional numerical vector.
+
 
 ### Step 3: Distribution (MongoDB)
 The processed data is stored in the `Knowledge` collection in MongoDB:

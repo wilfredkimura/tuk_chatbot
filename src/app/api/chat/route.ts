@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import dbConnect from "@/lib/db";
+import dbConnect from "@/lib/mongodb";
 import Chat from "@/models/Chat";
 import Memory from "@/models/Memory";
-import systemPromptData from "@/lib/system_prompt.json";
-import { getRelevantContext } from "@/lib/rag";
+import systemPromptData from "@/constants/systemPrompt.json";
+import { getRelevantContext } from "@/lib/rag/retriever";
+import { GoogleGenAI } from "@google/genai";
 
-const GROQ_API_KEY = process.env.GROQ_API_KEY!;
-const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY!
+});
 
 interface Message {
   role: "system" | "user" | "assistant";
@@ -21,21 +23,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No messages provided" }, { status: 400 });
     }
 
-    if (!GROQ_API_KEY) {
-      return NextResponse.json({ error: "Groq API key not configured" }, { status: 500 });
-    }
-
     // Connect to DB
     await dbConnect();
 
     // Generate or use existing sessionId
     const sessionId = incomingSessionId || crypto.randomUUID();
 
-    // Get the latest user message
+    // Get the latest user message for RAG retrieval
     const userMessage = messages[messages.length - 1]?.content || "";
 
+    // OPTIMIZATION: Skip RAG for short greetings to save time (near-instant response)
+    const isGreeting = userMessage.length < 15 && /^(hello|hi|hey|how are you|good morning|good afternoon|good evening|yo|hola|greetings)/i.test(userMessage);
+
     // FETCH RELEVANT KNOWLEDGE (RAG)
-    const relevantContext = await getRelevantContext(userMessage);
+    const relevantContext = isGreeting ? "" : await getRelevantContext(userMessage);
+
 
     // Load memory context for this user
     let memoryContext = "";
@@ -49,106 +51,101 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Build system prompt from JSON + RAG Context
+    // Build system prompt from Constant + RAG Context
     const systemInstruction = systemPromptData.system_instructions + "\n\n" + relevantContext + memoryContext;
 
-    // Prepare messages for Groq Chat Completion
-    const groqMessages = [
-      { role: "system", content: systemInstruction },
-      ...messages.map((m: any) => ({
-        role: m.role,
-        content: m.content
-      }))
-    ];
+    // Convert chat history to Gemini format (model/user)
+    const contents = messages.map((m: any) => ({
+      role: m.role === "assistant" ? "model" : "user",
+      parts: [{ text: m.content }]
+    }));
 
-
-    // Call Groq Chat Completions API
-    const groqResponse = await fetch(GROQ_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${GROQ_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
-        messages: groqMessages,
-        temperature: 0.7,
-        max_tokens: 1024,
-      }),
+    // Start generating streaming response
+    const streamResult = await ai.models.generateContentStream({
+      model: "gemini-3-flash-preview",
+      contents: contents,
+      config: {
+        systemInstruction: systemInstruction
+      }
     });
 
-    if (!groqResponse.ok) {
-      const errorData = await groqResponse.json();
-      console.error("Groq API error:", errorData);
-      return NextResponse.json(
-        { error: errorData.error?.message || "Failed to get response from Groq" },
-        { status: groqResponse.status }
-      );
-    }
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        let fullText = "";
+        try {
+          for await (const chunk of streamResult) {
+            const text = chunk.text || "";
 
-    const groqData = await groqResponse.json();
-    const aiContent = groqData.choices?.[0]?.message?.content || "I'm sorry, I encountered an error processing the response.";
 
-    // Save the user message and AI response to MongoDB
-    if (userId) {
-      const lastUserMessage = messages[messages.length - 1]?.content || "";
-      if (messages[messages.length - 1]?.role === "user") {
-        await Chat.create({
-          userId,
-          sessionId,
-          role: "user",
-          content: lastUserMessage,
-        });
+
+            if (text) {
+              fullText += text;
+              controller.enqueue(encoder.encode(text));
+            }
+          }
+
+          // Save to DB in background after stream completes
+          if (userId) {
+            // Run background tasks without blocking the response
+            (async () => {
+              try {
+                if (messages[messages.length - 1]?.role === "user") {
+                  await Chat.create({ userId, sessionId, role: "user", content: userMessage });
+                }
+                await Chat.create({ userId, sessionId, role: "assistant", content: fullText });
+                await updateMemory(userId, messages, fullText);
+              } catch (e) {
+                console.error("Background save error:", e);
+              }
+            })();
+          }
+
+          controller.close();
+        } catch (error) {
+          controller.error(error);
+        }
       }
+    });
 
-      await Chat.create({
-        userId,
-        sessionId,
-        role: "assistant",
-        content: aiContent,
-      });
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "X-Session-ID": sessionId
+      }
+    });
 
-      // Update memory: store a rolling summary of key user details
-      await updateMemory(userId, messages, aiContent);
-    }
+  } catch (error: any) {
 
-    return NextResponse.json({ content: aiContent, sessionId });
-  } catch (error) {
-    console.error("Chat route error:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    console.error("Chat API Error:", error);
+    return NextResponse.json({ 
+      error: "Internal server error", 
+      details: error.message 
+    }, { status: 500 });
   }
 }
 
 // ─── Memory updater ───────────────────────────────────────────────
-async function updateMemory(userId: string, messages: Message[], aiResponse: string) {
+async function updateMemory(userId: string, messages: any[], aiResponse: string) {
   try {
     const lastUserMsg = messages[messages.length - 1]?.content || "";
-
-    // Extract simple key details from the conversation
     const keyDetails: string[] = [];
 
-    // Detect programme interest
     const programmeMatch = lastUserMsg.match(
-      /\b(engineering|computer science|IT|information technology|architecture|medicine|nursing|business|law|nursing|biology|chemistry|physics|math)\b/i
+      /\b(engineering|computer science|IT|information technology|architecture|medicine|nursing|business|law|biology|chemistry|physics|math)\b/i
     );
     if (programmeMatch) {
       keyDetails.push(`Interested in ${programmeMatch[0]}`);
     }
 
-    // Detect admission-related queries
     if (/admission|apply|application|intake|join|enroll/i.test(lastUserMsg)) {
       keyDetails.push("Asked about admissions");
     }
 
-    // Detect fee-related queries
     if (/fee|fees|cost|payment|scholarship/i.test(lastUserMsg)) {
       keyDetails.push("Asked about fees or funding");
     }
 
-    // Build a short context summary from the last few exchanges
     const recentExchange = messages
       .slice(-4)
       .map((m) => `${m.role === "user" ? "Student" : "TUK Bot"}: ${m.content.slice(0, 120)}`)
@@ -165,7 +162,6 @@ async function updateMemory(userId: string, messages: Message[], aiResponse: str
       { upsert: true }
     );
   } catch (err) {
-    // Non-critical — don't let memory errors break the response
     console.error("Memory update error:", err);
   }
 }

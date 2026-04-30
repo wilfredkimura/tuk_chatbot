@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { processKnowledgeDirectory } from "@/lib/documentProcessor";
+import { processKnowledgeDirectory } from "@/lib/rag/processor";
 
+/**
+ * Admin endpoint to trigger manual knowledge ingestion.
+ * Scans the data/knowledge directory and populates the vector database.
+ */
 export async function GET(req: NextRequest) {
   try {
     const result = await processKnowledgeDirectory();
@@ -10,11 +14,15 @@ export async function GET(req: NextRequest) {
     }
 
     return NextResponse.json({ 
-      message: "RAG Ingestion complete", 
+      success: true,
+      message: "Knowledge base synchronized successfully.", 
       filesProcessed: result.processed 
     });
   } catch (error: any) {
-    console.error("Ingestion error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("Ingestion endpoint error:", error);
+    return NextResponse.json({ 
+      success: false, 
+      error: error.message 
+    }, { status: 500 });
   }
 }

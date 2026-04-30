@@ -1,11 +1,13 @@
 import fs from "fs-extra";
 import path from "path";
 import { PDFParse } from "pdf-parse";
-import { getEmbedding } from "./gemini";
+import { getEmbedding } from "@/services/gemini";
 import Knowledge from "@/models/Knowledge";
-import dbConnect from "./db";
+import dbConnect from "@/lib/mongodb";
 
-// Simple chunking utility
+/**
+ * Splits text into semantic chunks for better retrieval.
+ */
 function chunkText(text: string, maxChunkSize: number = 1000): string[] {
   const chunks: string[] = [];
   let currentPos = 0;
@@ -13,7 +15,6 @@ function chunkText(text: string, maxChunkSize: number = 1000): string[] {
   while (currentPos < text.length) {
     let endPos = currentPos + maxChunkSize;
     if (endPos < text.length) {
-      // Try to find a sentence end or newline to break cleanly
       const lastNewline = text.lastIndexOf("\n", endPos);
       if (lastNewline > currentPos + maxChunkSize * 0.8) {
         endPos = lastNewline + 1;
@@ -27,16 +28,17 @@ function chunkText(text: string, maxChunkSize: number = 1000): string[] {
     chunks.push(text.slice(currentPos, endPos).trim());
     currentPos = endPos;
   }
-  return chunks.filter(c => c.length > 50); // Ignore tiny chunks
+  return chunks.filter(c => c.length > 50);
 }
 
-
+/**
+ * Scans the data/knowledge directory and indexes all documents into MongoDB.
+ */
 export async function processKnowledgeDirectory() {
   await dbConnect();
   const dirPath = path.join(process.cwd(), "data", "knowledge");
   
   if (!fs.existsSync(dirPath)) {
-    console.log("No knowledge directory found at:", dirPath);
     return { processed: 0, error: "Directory not found" };
   }
 
@@ -51,44 +53,37 @@ export async function processKnowledgeDirectory() {
     try {
       if (ext === ".pdf") {
         const buffer = await fs.readFile(filePath);
-        // Modern pdf-parse usage (class-based)
         const parser = new PDFParse({ data: buffer });
         const result = await parser.getText();
         content = result.text;
-        // Clean up parser resources
         await parser.destroy();
       } else if (ext === ".json") {
-
         const data = await fs.readJson(filePath);
         content = JSON.stringify(data, null, 2);
       } else if (ext === ".txt" || ext === ".md") {
         content = await fs.readFile(filePath, "utf-8");
       } else {
-        console.log(`Skipping unsupported file type: ${file}`);
         continue;
       }
 
       if (!content.trim()) continue;
 
-      console.log(`Processing ${file} (${content.length} chars)...`);
-      
-      // Clear existing knowledge from this file to avoid duplicates
+      // Clean old records for this file to prevent duplicates
       await Knowledge.deleteMany({ category: file });
 
       const chunks = chunkText(content);
-      
       for (const chunk of chunks) {
         const embedding = await getEmbedding(chunk);
         await Knowledge.create({
           content: chunk,
-          category: file, // Use filename as category
+          category: file,
           embedding: embedding
         });
       }
 
       totalProcessed++;
     } catch (err) {
-      console.error(`Error processing ${file}:`, err);
+      console.error(`Failed to index ${file}:`, err);
     }
   }
 
