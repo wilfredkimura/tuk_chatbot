@@ -4,11 +4,7 @@ import Chat from "@/models/Chat";
 import Memory from "@/models/Memory";
 import systemPromptData from "@/constants/systemPrompt.json";
 import { getRelevantContext } from "@/lib/rag/retriever";
-import { GoogleGenAI } from "@google/genai";
-
-const ai = new GoogleGenAI({
-  apiKey: process.env.AI_API_KEY!
-});
+import { ai } from "@/services/aiService";
 
 interface Message {
   role: "system" | "user" | "assistant";
@@ -50,7 +46,7 @@ export async function POST(req: NextRequest) {
       parts: [{ text: m.content }]
     }));
 
-    // Using the high-performance model (internal name kept for technical reasons)
+    // Start generating streaming response
     const streamResult = await ai.models.generateContentStream({
       model: "gemini-3-flash-preview",
       contents: contents,
@@ -63,6 +59,8 @@ export async function POST(req: NextRequest) {
     const stream = new ReadableStream({
       async start(controller) {
         let fullText = "";
+        let finalUsage: any = null;
+
         try {
           for await (const chunk of streamResult) {
             const text = chunk.text || "";
@@ -70,15 +68,42 @@ export async function POST(req: NextRequest) {
               fullText += text;
               controller.enqueue(encoder.encode(text));
             }
+            // Capture usage metadata if available in the chunk (usually in the last one)
+            if (chunk.usageMetadata) {
+              finalUsage = chunk.usageMetadata;
+            }
+          }
+
+          if (finalUsage) {
+            console.log(`[Token Usage] Prompt: ${finalUsage.promptTokenCount}, Completion: ${finalUsage.candidatesTokenCount}, Total: ${finalUsage.totalTokenCount}`);
           }
 
           if (userId) {
             (async () => {
               try {
                 if (messages[messages.length - 1]?.role === "user") {
-                  await Chat.create({ userId, sessionId, role: "user", content: userMessage });
+                  await Chat.create({ 
+                    userId, 
+                    sessionId, 
+                    role: "user", 
+                    content: userMessage,
+                    usage: {
+                      promptTokens: finalUsage?.promptTokenCount || 0,
+                      totalTokens: finalUsage?.promptTokenCount || 0
+                    }
+                  });
                 }
-                await Chat.create({ userId, sessionId, role: "assistant", content: fullText });
+                await Chat.create({ 
+                  userId, 
+                  sessionId, 
+                  role: "assistant", 
+                  content: fullText,
+                  usage: {
+                    promptTokens: finalUsage?.promptTokenCount || 0,
+                    completionTokens: finalUsage?.candidatesTokenCount || 0,
+                    totalTokens: finalUsage?.totalTokenCount || 0
+                  }
+                });
                 await updateMemory(userId, messages, fullText);
               } catch (e) {
                 console.error("Background save error:", e);
