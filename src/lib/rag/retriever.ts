@@ -16,7 +16,7 @@ const CACHE_TTL = 1000 * 60 * 5; // 5 minutes
 
 export async function getRelevantContext(query: string, limit: number = 3): Promise<string> {
   try {
-    // Get embedding locally
+    // Get embedding locally using Transformers.js
     const queryEmbedding = await getLocalEmbedding(query);
     
     await dbConnect();

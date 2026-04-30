@@ -304,8 +304,10 @@ export default function ChatInterface() {
             return newMsgs;
           });
         }
+        console.log(`[Usage] Response received: ${fullText.length} characters.`);
       }
     } catch (error) {
+
       console.error("Chat Error:", error);
     } finally {
       setIsLoading(false);

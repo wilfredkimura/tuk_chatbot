@@ -5,6 +5,11 @@ const ChatSchema = new Schema({
   sessionId: { type: String, index: true },
   role: { type: String, enum: ["user", "assistant"], required: true },
   content: { type: String, required: true },
+  usage: {
+    promptTokens: { type: Number, default: 0 },
+    completionTokens: { type: Number, default: 0 },
+    totalTokens: { type: Number, default: 0 },
+  },
   createdAt: { type: Date, default: Date.now },
 });
 

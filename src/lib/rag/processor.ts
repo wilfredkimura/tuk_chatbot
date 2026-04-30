@@ -23,6 +23,7 @@ export async function processFile(filename: string) {
 
   for (const chunk of chunks) {
     try {
+      // Use local embedding instead of cloud API
       const embedding = await getLocalEmbedding(chunk);
       
       await Knowledge.findOneAndUpdate(
@@ -33,7 +34,7 @@ export async function processFile(filename: string) {
           embedding: embedding,
           updatedAt: new Date()
         },
-        { upsert: true, new: true }
+        { upsert: true, returnDocument: 'after' }
       );
     } catch (err) {
       console.error(`Error processing chunk in ${filename}:`, err);
