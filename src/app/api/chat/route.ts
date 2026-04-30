@@ -4,9 +4,11 @@ import Chat from "@/models/Chat";
 import Memory from "@/models/Memory";
 import systemPromptData from "@/constants/systemPrompt.json";
 import { getRelevantContext } from "@/lib/rag/retriever";
+import { GoogleGenAI } from "@google/genai";
 
-const GROQ_API_KEY = process.env.GROQ_API_KEY!;
-const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY!
+});
 
 interface Message {
   role: "system" | "user" | "assistant";
@@ -19,10 +21,6 @@ export async function POST(req: NextRequest) {
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return NextResponse.json({ error: "No messages provided" }, { status: 400 });
-    }
-
-    if (!GROQ_API_KEY) {
-      return NextResponse.json({ error: "Groq API key not configured" }, { status: 500 });
     }
 
     // Connect to DB
@@ -52,104 +50,80 @@ export async function POST(req: NextRequest) {
     // Build system prompt from Constant + RAG Context
     const systemInstruction = systemPromptData.system_instructions + "\n\n" + relevantContext + memoryContext;
 
+    // Convert chat history to Gemini format (model/user)
+    const contents = messages.map((m: any) => ({
+      role: m.role === "assistant" ? "model" : "user",
+      parts: [{ text: m.content }]
+    }));
 
-    // Prepare messages for Groq Chat Completion
-    const groqMessages = [
-      { role: "system", content: systemInstruction },
-      ...messages.map((m: any) => ({
-        role: m.role,
-        content: m.content
-      }))
-    ];
-
-
-    // Call Groq Chat Completions API
-    const groqResponse = await fetch(GROQ_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${GROQ_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
-        messages: groqMessages,
-        temperature: 0.7,
-        max_tokens: 1024,
-      }),
+    // Generate response using the latest Gemini 3 Flash Preview
+    const result = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      systemInstruction: systemInstruction,
+      contents: contents
     });
 
-    if (!groqResponse.ok) {
-      const errorData = await groqResponse.json();
-      console.error("Groq API error:", errorData);
-      return NextResponse.json(
-        { error: errorData.error?.message || "Failed to get response from Groq" },
-        { status: groqResponse.status }
-      );
-    }
+    const responseText = result.text;
 
-    const groqData = await groqResponse.json();
-    const aiContent = groqData.choices?.[0]?.message?.content || "I'm sorry, I encountered an error processing the response.";
-
-    // Save the user message and AI response to MongoDB
+    // Save to DB
     if (userId) {
-      const lastUserMessage = messages[messages.length - 1]?.content || "";
+      // Save User Message if it's the last one in the array (and hasn't been saved)
       if (messages[messages.length - 1]?.role === "user") {
         await Chat.create({
           userId,
           sessionId,
           role: "user",
-          content: lastUserMessage,
+          content: userMessage,
         });
       }
 
+      // Save AI Response
       await Chat.create({
         userId,
         sessionId,
         role: "assistant",
-        content: aiContent,
+        content: responseText,
       });
 
-      // Update memory: store a rolling summary of key user details
-      await updateMemory(userId, messages, aiContent);
+      // Update memory
+      await updateMemory(userId, messages, responseText);
     }
 
-    return NextResponse.json({ content: aiContent, sessionId });
-  } catch (error) {
-    console.error("Chat route error:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return NextResponse.json({
+      content: responseText,
+      sessionId
+    });
+
+  } catch (error: any) {
+    console.error("Chat API Error:", error);
+    return NextResponse.json({ 
+      error: "Internal server error", 
+      details: error.message 
+    }, { status: 500 });
   }
 }
 
 // ─── Memory updater ───────────────────────────────────────────────
-async function updateMemory(userId: string, messages: Message[], aiResponse: string) {
+async function updateMemory(userId: string, messages: any[], aiResponse: string) {
   try {
     const lastUserMsg = messages[messages.length - 1]?.content || "";
-
-    // Extract simple key details from the conversation
     const keyDetails: string[] = [];
 
-    // Detect programme interest
     const programmeMatch = lastUserMsg.match(
-      /\b(engineering|computer science|IT|information technology|architecture|medicine|nursing|business|law|nursing|biology|chemistry|physics|math)\b/i
+      /\b(engineering|computer science|IT|information technology|architecture|medicine|nursing|business|law|biology|chemistry|physics|math)\b/i
     );
     if (programmeMatch) {
       keyDetails.push(`Interested in ${programmeMatch[0]}`);
     }
 
-    // Detect admission-related queries
     if (/admission|apply|application|intake|join|enroll/i.test(lastUserMsg)) {
       keyDetails.push("Asked about admissions");
     }
 
-    // Detect fee-related queries
     if (/fee|fees|cost|payment|scholarship/i.test(lastUserMsg)) {
       keyDetails.push("Asked about fees or funding");
     }
 
-    // Build a short context summary from the last few exchanges
     const recentExchange = messages
       .slice(-4)
       .map((m) => `${m.role === "user" ? "Student" : "TUK Bot"}: ${m.content.slice(0, 120)}`)
@@ -166,7 +140,6 @@ async function updateMemory(userId: string, messages: Message[], aiResponse: str
       { upsert: true }
     );
   } catch (err) {
-    // Non-critical — don't let memory errors break the response
     console.error("Memory update error:", err);
   }
 }
