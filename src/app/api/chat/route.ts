@@ -7,7 +7,7 @@ import { getRelevantContext } from "@/lib/rag/retriever";
 import { GoogleGenAI } from "@google/genai";
 
 const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY!
+  apiKey: process.env.AI_API_KEY!
 });
 
 interface Message {
@@ -23,23 +23,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No messages provided" }, { status: 400 });
     }
 
-    // Connect to DB
     await dbConnect();
-
-    // Generate or use existing sessionId
     const sessionId = incomingSessionId || crypto.randomUUID();
-
-    // Get the latest user message for RAG retrieval
     const userMessage = messages[messages.length - 1]?.content || "";
 
-    // OPTIMIZATION: Skip RAG for short greetings to save time (near-instant response)
+    // OPTIMIZATION: Skip RAG for short greetings
     const isGreeting = userMessage.length < 15 && /^(hello|hi|hey|how are you|good morning|good afternoon|good evening|yo|hola|greetings)/i.test(userMessage);
 
-    // FETCH RELEVANT KNOWLEDGE (RAG)
     const relevantContext = isGreeting ? "" : await getRelevantContext(userMessage);
 
-
-    // Load memory context for this user
     let memoryContext = "";
     if (userId) {
       const memory = await Memory.findOne({ userId });
@@ -51,16 +43,14 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Build system prompt from Constant + RAG Context
     const systemInstruction = systemPromptData.system_instructions + "\n\n" + relevantContext + memoryContext;
 
-    // Convert chat history to Gemini format (model/user)
     const contents = messages.map((m: any) => ({
       role: m.role === "assistant" ? "model" : "user",
       parts: [{ text: m.content }]
     }));
 
-    // Start generating streaming response
+    // Using the high-performance model (internal name kept for technical reasons)
     const streamResult = await ai.models.generateContentStream({
       model: "gemini-3-flash-preview",
       contents: contents,
@@ -76,18 +66,13 @@ export async function POST(req: NextRequest) {
         try {
           for await (const chunk of streamResult) {
             const text = chunk.text || "";
-
-
-
             if (text) {
               fullText += text;
               controller.enqueue(encoder.encode(text));
             }
           }
 
-          // Save to DB in background after stream completes
           if (userId) {
-            // Run background tasks without blocking the response
             (async () => {
               try {
                 if (messages[messages.length - 1]?.role === "user") {
@@ -100,7 +85,6 @@ export async function POST(req: NextRequest) {
               }
             })();
           }
-
           controller.close();
         } catch (error) {
           controller.error(error);
@@ -116,7 +100,6 @@ export async function POST(req: NextRequest) {
     });
 
   } catch (error: any) {
-
     console.error("Chat API Error:", error);
     return NextResponse.json({ 
       error: "Internal server error", 
@@ -125,7 +108,6 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// ─── Memory updater ───────────────────────────────────────────────
 async function updateMemory(userId: string, messages: any[], aiResponse: string) {
   try {
     const lastUserMsg = messages[messages.length - 1]?.content || "";
