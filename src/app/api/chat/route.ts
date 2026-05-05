@@ -49,14 +49,43 @@ export async function POST(req: NextRequest) {
       parts: [{ text: m.content }]
     }));
 
-    // Start generating streaming response
-    const streamResult = await ai.models.generateContentStream({
-      model: "gemini-3-flash-preview",
-      contents: contents,
-      config: {
-        systemInstruction: systemInstruction.slice(0, 5000) // Safety cap
+    // Start generating streaming response with retry logic
+    const MODELS = ["gemini-3-flash-preview", "gemini-2.5-flash"];
+    let streamResult: any = null;
+    let lastError: any = null;
+
+    for (const model of MODELS) {
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          streamResult = await ai.models.generateContentStream({
+            model,
+            contents: contents,
+            config: {
+              systemInstruction: systemInstruction.slice(0, 5000) // Safety cap
+            }
+          });
+          break; // success
+        } catch (err: any) {
+          lastError = err;
+          const status = err?.status || err?.code;
+          if (status === 503 || status === 429) {
+            console.warn(`[Gemini] ${model} attempt ${attempt}/2 failed (${status}). Retrying...`);
+            await new Promise((r) => setTimeout(r, 1000 * attempt));
+            continue;
+          }
+          if (status === 404) {
+            console.warn(`[Gemini] ${model} not found, trying next model...`);
+            break; // skip to next model
+          }
+          throw err; // non-retryable error
+        }
       }
-    });
+      if (streamResult) break;
+    }
+
+    if (!streamResult) {
+      throw lastError || new Error("All Gemini models unavailable");
+    }
 
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
