@@ -8,15 +8,12 @@ import { processKnowledgeDirectory } from "@/lib/rag/processor";
 export async function GET(req: NextRequest) {
   try {
     const result = await processKnowledgeDirectory();
-    
-    if (result.error) {
-      return NextResponse.json({ error: result.error }, { status: 404 });
-    }
 
     return NextResponse.json({ 
       success: true,
       message: "Knowledge base synchronized successfully.", 
-      filesProcessed: result.processed 
+      filesProcessed: result.processed,
+      totalDocuments: result.totalDocuments
     });
   } catch (error: any) {
     console.error("Ingestion endpoint error:", error);
